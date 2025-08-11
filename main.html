@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Bolota</title>
+  <style>
+    body {
+      font-family: monospace;
+      background: #111;
+      color: #ddd;
+      margin: 0;
+      padding: 20px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #nome-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    #nome-box {
+      background: #222;
+      padding: 30px;
+      border: 1px solid #444;
+      text-align: center;
+    }
+
+    #nome-input {
+      padding: 10px;
+      background: #333;
+      border: 1px solid #555;
+      color: #ddd;
+      margin: 10px;
+      width: 200px;
+    }
+
+    #nome-ok {
+      padding: 10px 20px;
+      background: #555;
+      border: 1px solid #777;
+      color: #ddd;
+      cursor: pointer;
+    }
+
+    #nome-ok:hover {
+      background: #666;
+    }
+
+    #chat {
+      flex: 1;
+      background: #222;
+      padding: 15px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      border: 1px solid #444;
+      margin-bottom: 10px;
+    }
+
+    #input-area {
+      display: flex;
+      gap: 10px;
+    }
+
+    #msg {
+      flex: 1;
+      padding: 10px;
+      background: #333;
+      border: 1px solid #555;
+      color: #ddd;
+    }
+
+    #send {
+      padding: 10px 20px;
+      background: #555;
+      border: 1px solid #777;
+      color: #ddd;
+      cursor: pointer;
+    }
+
+    #send:hover {
+      background: #666;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="nome-modal">
+    <div id="nome-box">
+      <h3>Digite seu nome:</h3>
+      <input id="nome-input" type="text" placeholder="Seu nome">
+      <br>
+      <button id="nome-ok">OK</button>
+    </div>
+  </div>
+
+  <h2>Chat Bolota</h2>
+  <div id="chat">Carregando...</div>
+  <div id="input-area">
+    <input id="msg" type="text" placeholder="Digite sua mensagem">
+    <button id="send">Enviar</button>
+  </div>
+
+  <script>
+    const URL_GET_HIST = "http://192.168.1.9:8081";
+    const URL_POST_MSG = "http://192.168.1.9:8082";
+    let nomeUsuario = "";
+
+    function atualizarChat() {
+      fetch(URL_GET_HIST)
+        .then(res => {
+          // Não verifica res.ok aqui pois pode dar partial transfer
+          return res.text();
+        })
+        .then(data => {
+          const chatDiv = document.getElementById('chat');
+          if (chatDiv && data.trim()) {
+            chatDiv.textContent = data;
+            chatDiv.scrollTop = chatDiv.scrollHeight;
+          }
+        })
+        .catch(err => {
+          console.error("Erro ao carregar chat:", err);
+          // Não mostra erro na tela pois pode ser só partial transfer
+        });
+    }
+
+    function enviarMensagem() {
+      let msgInput = document.getElementById('msg');
+      let msg = msgInput.value.trim();
+      if (!msg) return;
+
+      let mensagemCompleta = nomeUsuario + ": " + msg;
+
+      fetch(URL_POST_MSG, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain'
+        },
+        body: mensagemCompleta
+      })
+        .then(res => {
+          // Força a limpeza de múltiplas formas
+          msgInput.value = '';
+          msgInput.setAttribute('value', '');
+          msgInput.textContent = '';
+          setTimeout(() => atualizarChat(), 300);
+        })
+        .catch(err => {
+          console.error("Erro ao enviar:", err);
+          msgInput.value = msg;
+        });
+    }
+
+    function definirNome() {
+      let nome = document.getElementById('nome-input').value.trim();
+      if (!nome) return;
+      nomeUsuario = nome;
+      document.getElementById('nome-modal').style.display = 'none';
+      atualizarChat();
+    }
+
+    setInterval(atualizarChat, 10000);
+
+    document.getElementById('nome-ok').onclick = definirNome;
+    document.getElementById('nome-input').onkeypress = (e) => {
+      if (e.key === 'Enter') definirNome();
+    };
+
+    document.getElementById('send').onclick = enviarMensagem;
+    document.getElementById('msg').onkeypress = (e) => {
+      if (e.key === 'Enter') enviarMensagem();
+    };
+  </script>
+</body>
+
+</html>
