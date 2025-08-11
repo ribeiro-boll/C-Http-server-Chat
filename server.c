@@ -27,7 +27,7 @@ int get_file_bytes(FILE *txt){
 }
 
 void send_header(int socketfd,FILE *arq){
-    char header[] = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n" ;
+    char header[] = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n" ;
     send(socketfd, header, strlen(header), 0);
     rewind(arq);
     return;
