@@ -3,7 +3,9 @@
 
 <head>
   <meta charset="UTF-8">
+  
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:,">
   <title>Chat Bolota</title>
   <style>
     body {
@@ -12,7 +14,7 @@
       color: #ddd;
       margin: 0;
       padding: 20px;
-      height: 100vh;
+      height: 90vh;
       display: flex;
       flex-direction: column;
     }
@@ -104,25 +106,20 @@
       <button id="nome-ok">OK</button>
     </div>
   </div>
-
-  <h2>Chat Bolota</h2>
   <div id="chat">Carregando...</div>
   <div id="input-area">
-    <input id="msg" type="text" placeholder="Digite sua mensagem">
+    <input id="msg" type="text" placeholder="Digite sua mensagem" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
     <button id="send">Enviar</button>
   </div>
 
   <script>
-    const URL_GET_HIST = "http://192.168.1.9:8081";
-    const URL_POST_MSG = "http://192.168.1.9:8082";
+    const URL_GET_HIST = "http://10.0.0.207:8081";
+    const URL_POST_MSG = "http://10.0.0.207:8082";
     let nomeUsuario = "";
 
     function atualizarChat() {
       fetch(URL_GET_HIST)
-        .then(res => {
-          // Não verifica res.ok aqui pois pode dar partial transfer
-          return res.text();
-        })
+        .then(res => res.text())
         .then(data => {
           const chatDiv = document.getElementById('chat');
           if (chatDiv && data.trim()) {
@@ -132,7 +129,6 @@
         })
         .catch(err => {
           console.error("Erro ao carregar chat:", err);
-          // Não mostra erro na tela pois pode ser só partial transfer
         });
     }
 
@@ -143,6 +139,7 @@
 
       let mensagemCompleta = nomeUsuario + ": " + msg;
 
+      msgInput.value = ""; 
       fetch(URL_POST_MSG, {
         method: 'POST',
         headers: {
@@ -150,17 +147,9 @@
         },
         body: mensagemCompleta
       })
-        .then(res => {
-          // Força a limpeza de múltiplas formas
-          msgInput.value = '';
-          msgInput.setAttribute('value', '');
-          msgInput.textContent = '';
-          setTimeout(() => atualizarChat(), 300);
-        })
-        .catch(err => {
-          console.error("Erro ao enviar:", err);
-          msgInput.value = msg;
-        });
+      .catch(err => {
+        console.error("Erro ao enviar:", err);
+      });
     }
 
     function definirNome() {
@@ -171,7 +160,7 @@
       atualizarChat();
     }
 
-    setInterval(atualizarChat, 10000);
+    setInterval(atualizarChat, 1000);
 
     document.getElementById('nome-ok').onclick = definirNome;
     document.getElementById('nome-input').onkeypress = (e) => {

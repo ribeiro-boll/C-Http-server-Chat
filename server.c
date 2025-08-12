@@ -15,37 +15,53 @@ void separador(){
     printf("\n%s\n",separador);
 }
 
+void print_status(int socket_html,int socket_GET, int socket_POST,char addr[],char port_html[],char port_GET[],char port_POST[]){
+    system("clear");
+    separador();
+    printf("Socket F.D. %d | Url GET html:\t\thttp://%s:%s\n",socket_html,addr,port_html);
+    
+    separador();
+    printf("Socket F.D. %d | Url GET historico.txt:\thttp://%s:%s\n",socket_GET,addr,port_GET);
+    
+    separador();
+    printf("Socket F.D. %d | Url POST mensagem:\thttp://%s:%s\n",socket_POST,addr,port_POST);
+}
+
+
 int get_file_bytes(FILE *txt){
     int contador=0;
     char ch;
     while ((ch = fgetc(txt)) != EOF) {
         contador++;
     }
+    //printf("\n%d\n",contador);
     rewind(txt);
-    contador++;
     return contador;
 }
 
 void send_header(int socketfd,FILE *arq){
-    char header[] = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n" ;
-    send(socketfd, header, strlen(header), 0);
+    char header[] = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: " ;
+    //char header[] = "HTTP/1.0 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n";
+    char request[5000];
+    snprintf(request, 5000, "%s%d\r\n\r\n", header,get_file_bytes(arq));
+    send(socketfd, request, strlen(request), 0);
     rewind(arq);
     return;
 }
 
 void send_html(int socketfd_html){
     char buffer[1024],ch;
-    int contador = 0;
+    int contador = 0,total = 0;
     FILE *html = fopen("main.html","r");
     send_header(socketfd_html, html);
+    rewind(html);
     while ((ch = fgetc(html))!=EOF) {
-        
         if (contador == 1023){
             send(socketfd_html,buffer,contador,0);
             contador = 0;
             memset(buffer, 0, 1024);
         }
-
+        total++;
         buffer[contador] = ch;
         contador++;        
     }
@@ -54,7 +70,6 @@ void send_html(int socketfd_html){
         buffer[contador] = '\0';
         send(socketfd_html, buffer, contador, 0);
     }
-
     rewind(html);
     fclose(html);
     return;
@@ -65,7 +80,6 @@ void send_txt(int socketfd_GET){
     FILE *txt = fopen("log.txt","r");
     send_header(socketfd_GET, txt);
     while ((ch = fgetc(txt)) != EOF) {
-        
         if (contador == 1023){
             send(socketfd_GET,buffer,contador,0);
             contador = 0;
@@ -131,7 +145,7 @@ void get_username(char *parsed_buffer,char **username,char **texto){
     *texto = token;
 }
 
-void set_conection(int socketfd_html,int socketfd_GET,int socketfd_POST,int socketfd_cliente, int numero_user){
+void set_conection(int socketfd_html,int socketfd_GET,int socketfd_POST,int socketfd_cliente,char addr[], char port_html[], char port_GET[],char port_POST[]){
     pid_t pid_envio_html;
     pid_envio_html = fork();
     
@@ -139,6 +153,7 @@ void set_conection(int socketfd_html,int socketfd_GET,int socketfd_POST,int sock
         char buffer[5000];
         recv(socketfd_cliente,buffer,5000,0);
         send_html(socketfd_cliente);
+        shutdown(socketfd_cliente, SHUT_WR);
         close(socketfd_cliente);
         pid_t pid_GET;
         pid_GET = fork();
@@ -152,8 +167,8 @@ void set_conection(int socketfd_html,int socketfd_GET,int socketfd_POST,int sock
                 int socketfd_GET_client;  
                 socketfd_GET_client = accept(socketfd_GET, (struct sockaddr*) &config_socket_client_GET, &size_conf);
                 recv(socketfd_GET_client, buffer, 2000, 0);
-                separador();
-                printf("\n%s\n",buffer);
+                //separador();
+                //printf("\n%s\n",buffer);
                 send_txt(socketfd_GET_client);
                 close(socketfd_GET_client);
             }
@@ -169,18 +184,17 @@ void set_conection(int socketfd_html,int socketfd_GET,int socketfd_POST,int sock
                 int socketfd_POST_client;    
                 socketfd_POST_client = accept(socketfd_POST, (struct sockaddr*) &config_socket_client_POST, &size_conf);
                 recv(socketfd_POST_client, buffer, 2000, 0);
-                printf("\n%s\n",buffer);
                 parse_buffer_POST(buffer,&parsed_buffer);
                 get_username(parsed_buffer, &parsed_username, &parsed_text);
                 snprintf(buffer_de_envio_ao_TxT, 3000, "[-> %s <-]=>%s\n\n", parsed_username,parsed_text);
-                
                 FILE *arquivo = fopen("log.txt", "a");
                 int arquivofd = fileno(arquivo);
                 flock(arquivofd, LOCK_EX);
                 fputs(buffer_de_envio_ao_TxT, arquivo);                
                 flock(arquivofd, LOCK_UN);
                 fclose(arquivo);
-
+                print_status(socketfd_html, socketfd_GET, socketfd_POST,addr, port_html, port_GET, port_POST);
+                printf("\nstring recived: %s",buffer_de_envio_ao_TxT);
                 memset(buffer,                 0, 2000);
                 memset(buffer_de_envio_ao_TxT, 0, 2000);
 
@@ -258,46 +272,32 @@ void create_socket(int *socketfd,char *addr,char *port){
     return;
 }
 
+
 int main (){
     FILE *arquiv = fopen("log.txt", "w");     
     fclose(arquiv);
     char *addr,*port_html,*port_GET,*port_POST;
     int socket_html,socket_GET,socket_POST;
-    int contagem_users=0;
     struct sockaddr_storage config_socket_client;
     memset(&config_socket_client,0,sizeof(config_socket_client));
     socklen_t size_conf = sizeof(config_socket_client);
     
     system("clear");
     get_adress(&addr,&port_html,&port_GET,&port_POST);
-    printf("%s\n%s\n%s\n",port_html,port_GET,port_POST);
-    
-    separador();
+
     create_socket(&socket_html, addr, port_html);
-    printf("Socket F.D. %d | Url GET html:\t\thttp://%s:%s\n",socket_html,addr,port_html);
-    
-    separador();
-    create_socket(&socket_GET, addr, port_GET);
-    printf("Socket F.D. %d | Url GET historico.txt:\thttp://%s:%s\n",socket_GET,addr,port_GET);
-    
-    separador();
+
+    create_socket(&socket_GET, addr, port_GET);   
+
     create_socket(&socket_POST, addr, port_POST);
-    printf("Socket F.D. %d | Url POST mensagem:\thttp://%s:%s\n",socket_POST,addr,port_POST);
-    
-    printf("\n\n");
+
     listen(socket_html  , 9);
     listen(socket_GET   , 9);
     listen(socket_POST  , 9);
-    FILE *arquivo = fopen("contagem.conf", "w");
-    fputc('0', arquivo);
-    rewind(arquivo);
-    fclose(arquivo);
-    
+    print_status(socket_html, socket_GET, socket_POST,addr, port_html, port_GET, port_POST);
+    printf("\n[-> *placeholder* <-]=> placeholder*\n");
     while (1) {
         int socketfd_escuta = accept(socket_html,(struct sockaddr *)&config_socket_client, &size_conf);
-        contagem_users++;
-        
-
-        set_conection(socket_html, socket_GET, socket_POST,socketfd_escuta,contagem_users);
+        set_conection(socket_html, socket_GET, socket_POST,socketfd_escuta,addr,port_html,port_GET,port_POST);
     }
 }
