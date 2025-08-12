@@ -20,9 +20,8 @@ Do ponto de vista de aprendizado e funcionalidade, considero este projeto um suc
 - Fiz um esforço consciente para minimizar ajuda externa (IA, Stack Overflow, etc.). Na maior parte do tempo, consegui, exceto em casos específicos, como aprender sobre a função `flock()` (que eu não sabia que existia) e corrigir pequenos bugs, geralmente apenas erros de digitação.
 
 - O servidor funciona melhor do que eu esperava, lidando com requisições e fechando conexões de forma confiável.
-
-
-
+- 
+---
 
 # Project Overview
 
