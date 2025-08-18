@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
-  
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="data:,">
   <title>Chat Bolota</title>
@@ -108,15 +108,18 @@
   </div>
   <div id="chat">Carregando...</div>
   <div id="input-area">
-    <input id="msg" type="text" placeholder="Digite sua mensagem" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+    <input id="msg" type="text" placeholder="Digite sua mensagem" autocomplete="off" autocorrect="off"
+      autocapitalize="off" spellcheck="false" />
     <button id="send">Enviar</button>
   </div>
 
-  <script>
-    const URL_GET_HIST = "http://10.0.0.207:8081";
-    const URL_POST_MSG = "http://10.0.0.207:8082";
-    let nomeUsuario = "";
 
+  <script>
+    //js
+    const URL_GET_HIST = 'http://192.168.1.6:8081';
+    const URL_POST_MSG = 'http://192.168.1.6:8082';
+    //js
+    let nomeUsuario = "";
     function atualizarChat() {
       fetch(URL_GET_HIST)
         .then(res => res.text())
@@ -131,27 +134,24 @@
           console.error("Erro ao carregar chat:", err);
         });
     }
-
     function enviarMensagem() {
       let msgInput = document.getElementById('msg');
       let msg = msgInput.value.trim();
       if (!msg) return;
-
       let mensagemCompleta = nomeUsuario + ": " + msg;
-
-      msgInput.value = ""; 
+      msgInput.value = "";
       fetch(URL_POST_MSG, {
         method: 'POST',
         headers: {
+          'Connection': 'keep-alive',
           'Content-Type': 'text/plain'
         },
         body: mensagemCompleta
       })
-      .catch(err => {
-        console.error("Erro ao enviar:", err);
-      });
+        .catch(err => {
+          console.error("Erro ao enviar:", err);
+        });
     }
-
     function definirNome() {
       let nome = document.getElementById('nome-input').value.trim();
       if (!nome) return;
@@ -159,14 +159,11 @@
       document.getElementById('nome-modal').style.display = 'none';
       atualizarChat();
     }
-
     setInterval(atualizarChat, 1000);
-
     document.getElementById('nome-ok').onclick = definirNome;
     document.getElementById('nome-input').onkeypress = (e) => {
       if (e.key === 'Enter') definirNome();
     };
-
     document.getElementById('send').onclick = enviarMensagem;
     document.getElementById('msg').onkeypress = (e) => {
       if (e.key === 'Enter') enviarMensagem();

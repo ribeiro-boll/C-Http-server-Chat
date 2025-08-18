@@ -1,5 +1,6 @@
 // 192.168.1.8 ip raspberrypi
 
+#include <ifaddrs.h>
 #include <sys/file.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -9,6 +10,8 @@
 #include <netdb.h>
 #include <string.h>
 #include <stdio.h>
+
+
 
 void separador(){
     char separador[] = ">-------------------------------------------------------------------<";
@@ -49,15 +52,15 @@ void send_header(int socketfd,FILE *arq){
     return;
 }
 
-void send_html(int socketfd_html){
+void send_file(int socketfd,char path[]){
     char buffer[1024],ch;
     int contador = 0,total = 0;
-    FILE *html = fopen("main.html","r");
-    send_header(socketfd_html, html);
-    rewind(html);
-    while ((ch = fgetc(html))!=EOF) {
+    FILE *file = fopen(path,"r");
+    send_header(socketfd, file);
+    rewind(file);
+    while ((ch = fgetc(file))!=EOF) {
         if (contador == 1023){
-            send(socketfd_html,buffer,contador,0);
+            send(socketfd,buffer,contador,0);
             contador = 0;
             memset(buffer, 0, 1024);
         }
@@ -65,13 +68,12 @@ void send_html(int socketfd_html){
         buffer[contador] = ch;
         contador++;        
     }
-
     if (contador>0){
         buffer[contador] = '\0';
-        send(socketfd_html, buffer, contador, 0);
+        send(socketfd, buffer, contador, 0);
     }
-    rewind(html);
-    fclose(html);
+    rewind(file);
+    fclose(file);
     return;
 }
 void send_txt(int socketfd_GET){
@@ -152,38 +154,42 @@ void set_conection(int socketfd_html,int socketfd_GET,int socketfd_POST,int sock
     if (pid_envio_html == 0){
         char buffer[5000];
         recv(socketfd_cliente,buffer,5000,0);
-        send_html(socketfd_cliente);
+        send_file(socketfd_cliente,"main.html");
         shutdown(socketfd_cliente, SHUT_WR);
         close(socketfd_cliente);
         pid_t pid_GET;
         pid_GET = fork();
         if (pid_GET == 0){
+            struct sockaddr_storage config_socket_client_GET;
+            memset(&config_socket_client_GET,0,sizeof(config_socket_client_GET));
+            socklen_t size_conf = sizeof(config_socket_client_GET);
+            int socketfd_GET_client;
+            socketfd_GET_client = accept(socketfd_GET, (struct sockaddr*) &config_socket_client_GET, &size_conf);
             char buffer[2000];
-            memset(buffer, 0, 2000);
-            while (1){
-                struct sockaddr_storage config_socket_client_GET;
-                memset(&config_socket_client_GET,0,sizeof(config_socket_client_GET));
-                socklen_t size_conf = sizeof(config_socket_client_GET);
-                int socketfd_GET_client;  
-                socketfd_GET_client = accept(socketfd_GET, (struct sockaddr*) &config_socket_client_GET, &size_conf);
-                recv(socketfd_GET_client, buffer, 2000, 0);
-                //separador();
-                //printf("\n%s\n",buffer);
+            
+            int status_past = 1;
+            int status_new = 1;
+            while (status_new>0){
+                status_new = recv(socketfd_GET_client, buffer, 2000, 0);
                 send_txt(socketfd_GET_client);
-                close(socketfd_GET_client);
             }
+            close(socketfd_GET_client);
+            exit(0);
             return;
         }
-        else {
+        else if(pid_envio_html == 0) {
             char buffer[2000],buffer_de_envio_ao_TxT[3000],teste[2000],*parsed_buffer,*parsed_username,*parsed_text;
             memset(buffer, 0, 2000);
+            int status = 1;
+            
             while (1){
                 struct sockaddr_storage config_socket_client_POST;
                 memset(&config_socket_client_POST,0,sizeof(config_socket_client_POST));
                 socklen_t size_conf = sizeof(config_socket_client_POST);
                 int socketfd_POST_client;    
                 socketfd_POST_client = accept(socketfd_POST, (struct sockaddr*) &config_socket_client_POST, &size_conf);
-                recv(socketfd_POST_client, buffer, 2000, 0);
+                status = recv(socketfd_POST_client, buffer, 2000, 0);
+                //printf("\nPost: %d\n",status);
                 parse_buffer_POST(buffer,&parsed_buffer);
                 get_username(parsed_buffer, &parsed_username, &parsed_text);
                 snprintf(buffer_de_envio_ao_TxT, 3000, "[-> %s <-]=>%s\n\n", parsed_username,parsed_text);
@@ -201,13 +207,20 @@ void set_conection(int socketfd_html,int socketfd_GET,int socketfd_POST,int sock
                 parsed_buffer   = NULL;
                 parsed_text     = NULL;
                 parsed_username = NULL;
+                char resp[] = "HTTP/1.1 200 OK\r\n";
+                send(socketfd_POST_client, resp, strlen(resp), 0);
+                //printf("\nPost: %d",status);
                 close(socketfd_POST_client);
             }
+            free(parsed_buffer);
+            free(parsed_text);
+            free(parsed_username);
+            exit(0);
             return;
         }
+        exit(0);
     }
     else{
-
         return;
     }
 }
@@ -272,10 +285,110 @@ void create_socket(int *socketfd,char *addr,char *port){
     return;
 }
 
+int setIp(){
+    struct ifaddrs *ifaddr, *ifa;
+    int family, s;
+    char host[NI_MAXHOST];
+
+    if (getifaddrs(&ifaddr) == -1) {
+        perror("getifaddrs");
+        exit(EXIT_FAILURE);
+    }
+
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        family = ifa->ifa_addr->sa_family;
+
+        if (family == AF_INET) {
+            s = getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in),host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+            if (s != 0) {
+                printf("getnameinfo() failed: %s\n", gai_strerror(s));
+                exit(EXIT_FAILURE);
+            }
+            else if (strcmp(ifa->ifa_name, "wlp3s0")==0 || strcmp(ifa->ifa_name, "enp0s25")==0) {
+                FILE* arq = fopen("server_adress.conf", "w");
+                char buffer[5000];
+                snprintf(buffer,5000,"%s\n8080\n8081\n8082\n",host);
+                fputs(buffer, arq);
+                fclose(arq);
+                arq = fopen("main.html", "r");
+                int filebytes = get_file_bytes(arq);
+                char *jsbuffer1 = (char *)malloc(4);
+                char *jsbuffer2 = (char *)malloc(4);
+                char *jsbuffer3 = (char *)malloc(4);
+                char addr1[256] = "    const URL_GET_HIST = 'http://";
+                char addr2[256] = "    const URL_POST_MSG = 'http://";
+                char bufferjs1[1000],bufferjs2[1000];
+                char ch;
+                snprintf(bufferjs1, 1000, "%s%s:8081';\n", addr1,host);
+                snprintf(bufferjs2, 1000, "%s%s:8082';", addr2,host);
+                int contador1 = 0,contador2 = 0,contador3 = 0,part = 1,cond = 0,cond2 = 0;
+                while ((ch = getc(arq))!=EOF) {
+                    if (jsbuffer1[contador1-4] == '/' && jsbuffer1[contador1-3] == '/' && jsbuffer1[contador1-2] == 'j' && jsbuffer1[contador1-1] == 's'){
+                        if (cond == 0){
+                            contador1++;
+                            jsbuffer1 = realloc(jsbuffer1, contador1);
+                            jsbuffer1[contador1-1] = '\n';
+                            contador1++;
+                            jsbuffer1 = realloc(jsbuffer1, contador1);
+                            jsbuffer1[contador1-1] = '\0';
+                        }
+                        cond++;
+                        continue;
+                    }
+                    if (!cond){
+                        contador1++;
+                        jsbuffer1 = realloc(jsbuffer1, contador1);
+                        jsbuffer1[contador1-1] = ch;
+                        continue;
+                    }
+                    if (cond == 1){
+                        if (ch == '\n' && cond2<2){
+                            cond2++;
+                        }
+                        else if (cond2 >= 2){
+                            contador2++;
+                            jsbuffer2 = realloc(jsbuffer2, contador2);
+                            jsbuffer2[contador2-1] = ch;
+                            continue;
+                        }
+                        
+                    }
+                    /*
+                    else {
+                        contador3++;
+                        jsbuffer3 = realloc(jsbuffer2, contador2);
+                        jsbuffer3[contador3-1] = ch;
+                        if (jsbuffer3[contador3-4] == '/' && jsbuffer3[contador1-3] == '/' && jsbuffer3[contador1-2] == 'j' && jsbuffer1[contador3-1] == 's')
+                            cond++;
+                        continue;
+                    }
+                    */
+                }
+                contador2++;
+                jsbuffer2 = realloc(jsbuffer2, contador2);
+                jsbuffer2[contador2-1] = '\0';
+                fclose(arq);
+                arq = fopen("main.html", "w");
+                fputs(jsbuffer1, arq);
+                fputs(bufferjs1, arq);
+                fputs(bufferjs2, arq);
+                fputc('\n', arq);
+                fputs(jsbuffer2, arq);
+                fclose(arq);
+                //free(jsbuffer3);
+               // free(jsbuffer2);
+                //free(jsbuffer1);
+                break;
+            }
+        }
+    }
+    return 0;
+}
 
 int main (){
-    FILE *arquiv = fopen("log.txt", "w");     
-    fclose(arquiv);
+    setIp();
+    FILE *arq = fopen("log.txt","w");
+    fclose(arq);
     char *addr,*port_html,*port_GET,*port_POST;
     int socket_html,socket_GET,socket_POST;
     struct sockaddr_storage config_socket_client;
