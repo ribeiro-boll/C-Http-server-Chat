@@ -375,9 +375,9 @@ int setIp(){
                 fputc('\n', arq);
                 fputs(jsbuffer2, arq);
                 fclose(arq);
-                //free(jsbuffer3);
-               // free(jsbuffer2);
-                //free(jsbuffer1);
+                free(jsbuffer3);
+                free(jsbuffer2);
+                free(jsbuffer1);
                 break;
             }
         }
